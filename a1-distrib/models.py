@@ -52,7 +52,20 @@ class BigramFeatureExtractor(FeatureExtractor):
     Bigram feature extractor analogous to the unigram one.
     """
     def __init__(self, indexer: Indexer):
-        raise Exception("Must be implemented")
+        self.indexer = indexer
+
+    def get_indexer(self):
+        return self.indexer
+    
+    def extract_features(self, sentence: List[str], add_to_indexer: bool = False) -> Counter:
+        feature_vector = Counter()
+        for ii in range(len(sentence)-1):
+            word = f"{sentence[ii]} {sentence[ii+1]}"
+            if self.indexer.contains(word):
+                feature_vector[self.indexer.index_of(word)] += 1
+            elif add_to_indexer:
+                feature_vector[self.indexer.add_and_get_index(word)] += 1
+        return feature_vector
 
 
 class BetterFeatureExtractor(FeatureExtractor):
