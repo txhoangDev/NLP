@@ -1,6 +1,8 @@
 # models.py
 
 from numpy import zeros, append
+import nltk
+from nltk.corpus import stopwords
 from sentiment_data import *
 from utils import *
 
@@ -73,8 +75,34 @@ class BetterFeatureExtractor(FeatureExtractor):
     Better feature extractor...try whatever you can think of!
     """
     def __init__(self, indexer: Indexer):
-        raise Exception("Must be implemented")
+        self.indexer = indexer
+        # get the stop words
+        nltk.download('stopwords')
+        self.stopwords = stopwords.words('english')
+    
+    def get_indexer(self):
+        return self.indexer
 
+    def extract_features(self, sentence: List[str], add_to_indexer: bool = False) -> Counter:
+        feature_vector = Counter()
+
+        # unigram
+        for word in sentence:
+            if word.isalpha() and word not in self.stopwords:
+                if self.indexer.contains(word):
+                    feature_vector[self.indexer.index_of(word)] += 1
+                elif add_to_indexer and word not in self.stopwords:
+                    feature_vector[self.indexer.add_and_get_index(word)] += 1
+
+        # bigram
+        for ii in range(len(sentence)-1):
+            word = f"{sentence[ii]} {sentence[ii+1]}"
+            if self.indexer.contains(word) and word not in self.stopwords:
+                feature_vector[self.indexer.index_of(word)] += 1
+            elif add_to_indexer and word not in self.stopwords:
+                feature_vector[self.indexer.add_and_get_index(word)] += 1
+
+        return feature_vector
 
 class SentimentClassifier(object):
     """
