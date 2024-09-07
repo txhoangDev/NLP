@@ -1,6 +1,6 @@
 # models.py
 
-from numpy import zeros, append, exp
+from numpy import zeros, append, exp, random
 import nltk
 from nltk.corpus import stopwords
 from sentiment_data import *
@@ -171,6 +171,8 @@ class LogisticRegressionClassifier(SentimentClassifier):
     def __init__(self, featurizer):
         self.featurizer = featurizer
         self.weight = zeros(0)
+        self.learning_rate = 0
+        self.regularization_rate = 0
     
     def predict(self, sentence: List[str]) -> int:
         # Extract features
@@ -184,20 +186,23 @@ class LogisticRegressionClassifier(SentimentClassifier):
             else:
                 self.weight = append(self.weight, zeros((index+1) - len(self.weight)))
 
-        if score > 0:
-            score = score / (1 + exp(score))
-        else:
-            score = 1 / (1 + exp(score))
+        score = 1 / (1 + exp(-score))
         
-        return 1 if score > 0 else 0
+        return 1 if score > 0.5 else 0
     
     def update(self, sentence: List[str], true_label):
+        """
+        Updates the weight vector
+
+        :param sentence: words (List[str]) in the sentence to classify
+        :param true_label: The actual value of the label (1 for positive, 0 for negative)
+        """
         predicted_label = self.predict(sentence)
 
         if true_label != predicted_label:
             feature_vector = self.featurizer.extract_features(sentence, True)
             for index, value in feature_vector.items():
-                self.weight[index] += 0.01 * (true_label - predicted_label) * value
+                self.weight[index] += 0.14 * (true_label - predicted_label) * value
 
 def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureExtractor) -> PerceptronClassifier:
     """
@@ -207,9 +212,10 @@ def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureE
     :return: trained PerceptronClassifier model
     """
     perceptron = PerceptronClassifier(feat_extractor)
-    for _ in range(5):
+    for _ in range(10):
         for example in train_exs:
             perceptron.update(example.words, example.label)
+        random.shuffle(train_exs)
 
     return perceptron
 
@@ -221,11 +227,11 @@ def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor:
     :return: trained LogisticRegressionClassifier model
     """
     lr = LogisticRegressionClassifier(feat_extractor)
-    for _ in range(10):
+    for _ in range(20):
         for example in train_exs:
             lr.update(example.words, example.label)
+        random.shuffle(train_exs)
     return lr
-
 
 def train_model(args, train_exs: List[SentimentExample], dev_exs: List[SentimentExample]) -> SentimentClassifier:
     """
