@@ -1,5 +1,6 @@
 # models.py
 
+from numpy import zeros, append
 from sentiment_data import *
 from utils import *
 
@@ -31,8 +32,20 @@ class UnigramFeatureExtractor(FeatureExtractor):
     and any additional preprocessing you want to do.
     """
     def __init__(self, indexer: Indexer):
-        raise Exception("Must be implemented")
+        self.indexer = indexer
 
+    def get_indexer(self):
+        return self.indexer
+
+    def extract_features(self, sentence: List[str], add_to_indexer: bool = False) -> Counter:
+        feature_vector = Counter()
+        for word in sentence:
+            if word.isalpha():
+                if self.indexer.contains(word):
+                    feature_vector[self.indexer.index_of(word)] += 1
+                elif add_to_indexer:
+                    feature_vector[self.indexer.add_and_get_index(word)] += 1
+        return feature_vector
 
 class BigramFeatureExtractor(FeatureExtractor):
     """
@@ -76,9 +89,38 @@ class PerceptronClassifier(SentimentClassifier):
     superclass. Hint: you'll probably need this class to wrap both the weight vector and featurizer -- feel free to
     modify the constructor to pass these in.
     """
-    def __init__(self):
-        raise Exception("Must be implemented")
+    def __init__(self, featurizer):
+        self.featurizer = featurizer
+        self.weight = zeros(0)
 
+    def predict(self, sentence: List[str]) -> int:
+        # Extract features
+        feature_vector = self.featurizer.extract_features(sentence, True)
+        
+        # update the weight vector to have all the features
+        if len(feature_vector.keys()) > 0 and max(feature_vector.keys()) > len(self.weight):
+            self.weight = append(self.weight, zeros((max(feature_vector.keys()) - len(self.weight))))
+
+        # algorithm for perceptron
+        score = 0
+        for index, value in feature_vector.items():
+            score += self.weight[index-1] * value
+        
+        return 1 if score > 0 else 0
+    
+    def update(self, sentence: List[str], true_label: int):
+        """
+        Update the weights vector
+
+        :param sentence: words (List[str]) in the sentence to classify
+        :param true_label: The actual value of the label (1 for positive, 0 for negative)
+        """
+        predicted_label = self.predict(sentence)
+
+        if true_label != predicted_label:
+            feature_vector = self.featurizer.extract_features(sentence, True)
+            for index, value in feature_vector.items():
+                self.weight[index-1] += (true_label - predicted_label) * value
 
 class LogisticRegressionClassifier(SentimentClassifier):
     """
@@ -97,8 +139,12 @@ def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureE
     :param feat_extractor: feature extractor to use
     :return: trained PerceptronClassifier model
     """
-    raise Exception("Must be implemented")
+    perceptron = PerceptronClassifier(feat_extractor)
+    for _ in range(5):
+        for example in train_exs:
+            perceptron.update(example.words, example.label)
 
+    return perceptron
 
 def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor: FeatureExtractor) -> LogisticRegressionClassifier:
     """
