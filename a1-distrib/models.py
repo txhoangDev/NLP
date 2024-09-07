@@ -1,6 +1,6 @@
 # models.py
 
-from numpy import zeros, append
+from numpy import zeros, append, exp
 import nltk
 from nltk.corpus import stopwords
 from sentiment_data import *
@@ -168,9 +168,36 @@ class LogisticRegressionClassifier(SentimentClassifier):
     superclass. Hint: you'll probably need this class to wrap both the weight vector and featurizer -- feel free to
     modify the constructor to pass these in.
     """
-    def __init__(self):
-        raise Exception("Must be implemented")
+    def __init__(self, featurizer):
+        self.featurizer = featurizer
+        self.weight = zeros(0)
+    
+    def predict(self, sentence: List[str]) -> int:
+        # Extract features
+        feature_vector = self.featurizer.extract_features(sentence, True)
 
+        # algorithm for logistic regression
+        score = 0
+        for index, value in feature_vector.items():
+            if len(self.weight) > index:
+                score += self.weight[index] * value
+            else:
+                self.weight = append(self.weight, zeros((index+1) - len(self.weight)))
+
+        if score > 0:
+            score = score / (1 + exp(score))
+        else:
+            score = 1 / (1 + exp(score))
+        
+        return 1 if score > 0 else 0
+    
+    def update(self, sentence: List[str], true_label):
+        predicted_label = self.predict(sentence)
+
+        if true_label != predicted_label:
+            feature_vector = self.featurizer.extract_features(sentence, True)
+            for index, value in feature_vector.items():
+                self.weight[index] += 0.01 * (true_label - predicted_label) * value
 
 def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureExtractor) -> PerceptronClassifier:
     """
@@ -193,7 +220,11 @@ def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor:
     :param feat_extractor: feature extractor to use
     :return: trained LogisticRegressionClassifier model
     """
-    raise Exception("Must be implemented")
+    lr = LogisticRegressionClassifier(feat_extractor)
+    for _ in range(10):
+        for example in train_exs:
+            lr.update(example.words, example.label)
+    return lr
 
 
 def train_model(args, train_exs: List[SentimentExample], dev_exs: List[SentimentExample]) -> SentimentClassifier:
