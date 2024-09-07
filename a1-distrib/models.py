@@ -96,15 +96,14 @@ class PerceptronClassifier(SentimentClassifier):
     def predict(self, sentence: List[str]) -> int:
         # Extract features
         feature_vector = self.featurizer.extract_features(sentence, True)
-        
-        # update the weight vector to have all the features
-        if len(feature_vector.keys()) > 0 and max(feature_vector.keys()) > len(self.weight):
-            self.weight = append(self.weight, zeros((max(feature_vector.keys()) - len(self.weight))))
 
         # algorithm for perceptron
         score = 0
         for index, value in feature_vector.items():
-            score += self.weight[index-1] * value
+            if len(self.weight) > index:
+                score += self.weight[index] * value
+            else:
+                self.weight = append(self.weight, zeros((index+1) - len(self.weight)))
         
         return 1 if score > 0 else 0
     
@@ -120,7 +119,7 @@ class PerceptronClassifier(SentimentClassifier):
         if true_label != predicted_label:
             feature_vector = self.featurizer.extract_features(sentence, True)
             for index, value in feature_vector.items():
-                self.weight[index-1] += (true_label - predicted_label) * value
+                self.weight[index] += (true_label - predicted_label) * value
 
 class LogisticRegressionClassifier(SentimentClassifier):
     """
