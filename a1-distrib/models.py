@@ -43,10 +43,11 @@ class UnigramFeatureExtractor(FeatureExtractor):
         feature_vector = Counter()
         for word in sentence:
             if word.isalpha():
-                if self.indexer.contains(word):
-                    feature_vector[self.indexer.index_of(word)] += 1
+                word_lower = word.lower()
+                if self.indexer.contains(word_lower):
+                    feature_vector[self.indexer.index_of(word_lower)] += 1
                 elif add_to_indexer:
-                    feature_vector[self.indexer.add_and_get_index(word)] += 1
+                    feature_vector[self.indexer.add_and_get_index(word_lower)] += 1
         return feature_vector
 
 class BigramFeatureExtractor(FeatureExtractor):
