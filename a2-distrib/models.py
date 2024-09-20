@@ -1,5 +1,6 @@
 # models.py
 
+from .sentiment_data import List
 import torch
 import torch.nn as nn
 from torch import optim
@@ -52,8 +53,11 @@ class NeuralSentimentClassifier(SentimentClassifier):
     method and you can optionally override predict_all if you want to use batching at inference time (not necessary,
     but may make things faster!)
     """
-    def __init__(self):
-        raise NotImplementedError
+    def predict(self, ex_words: List[str], has_typos: bool) -> int:
+        # embed words
+        embeddings = nn.Embedding(ex_words.__len__)
+        
+        
 
 
 def train_deep_averaging_network(args, train_exs: List[SentimentExample], dev_exs: List[SentimentExample],
