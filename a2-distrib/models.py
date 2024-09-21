@@ -1,11 +1,11 @@
 # models.py
 
-from .sentiment_data import List
 import torch
 import torch.nn as nn
 from torch import optim
 import numpy as np
 import random
+from nltk import edit_distance
 from sentiment_data import *
 
 
@@ -53,12 +53,60 @@ class NeuralSentimentClassifier(SentimentClassifier):
     method and you can optionally override predict_all if you want to use batching at inference time (not necessary,
     but may make things faster!)
     """
+    def __init__(self, dan_model, word_embeddings, optimizer):
+        self.model = dan_model
+        self.model.eval()
+        self.word_embeddings = word_embeddings
+        self.optimizer = optimizer
+        
     def predict(self, ex_words: List[str], has_typos: bool) -> int:
-        # embed words
-        embeddings = nn.Embedding(ex_words.__len__)
+        # embedding words
+        word_indices = np.array([self.word_embeddings.get_embedding(word) for word in ex_words])
+        average = np.mean(word_indices, axis=0)
+        with torch.no_grad():
+            output = self.model(torch.tensor(average))
+            return output.argmax(dim=0).item()
         
-        
+    def predict_all(self, all_ex_words: List[List[str]], has_typos: bool) -> List[int]:
+        return [self.predict(word_example, has_typos) for word_example in all_ex_words]
 
+class DAN(nn.Module):
+    def __init__(self, embedding_size, hidden_layer_size, output_size):
+        """
+        Constructs the computation graph by instantiating the various layers and initializing weights.
+
+        :param inp: size of input (integer)
+        :param hid: size of hidden layer(integer)
+        :param out: size of output (integer), which should be the number of classes
+        """
+        super(DAN, self).__init__()
+        
+        self.non_linear = nn.ReLU()
+        
+        # hidden layer
+        self.hidden_layers = nn.ModuleList()
+        for _ in range(hidden_layer_size):
+            self.hidden_layers.append(nn.Linear(embedding_size, hidden_layer_size, dtype=torch.float64))
+        
+        # weights
+        self.weight = nn.Linear(hidden_layer_size, output_size, dtype=torch.float64)
+        
+        #softmax
+        self.log_softmax = nn.LogSoftmax(dim=0)
+
+    def forward(self, x):
+        # run non-linearity
+        output = self.non_linear(x)
+        
+        # run average through each layer
+        for hidden_layer in self.hidden_layers:
+            output = hidden_layer(output)
+            
+        # run weights
+        output = self.weight(output)
+        
+        #get log probability 
+        return self.log_softmax(output)
 
 def train_deep_averaging_network(args, train_exs: List[SentimentExample], dev_exs: List[SentimentExample],
                                  word_embeddings: WordEmbeddings, train_model_for_typo_setting: bool) -> NeuralSentimentClassifier:
@@ -72,5 +120,23 @@ def train_deep_averaging_network(args, train_exs: List[SentimentExample], dev_ex
     and return an instance of that for the typo setting if you want; you're allowed to return two different model types
     for the two settings.
     """
-    raise NotImplementedError
-
+    model = DAN(word_embeddings.get_embedding_length(), 1, 2)
+    # classifier = NeuralSentimentClassifier( word_embeddings)
+    criterion = nn.NLLLoss()
+    optimizer = optim.Adam(model.parameters(), 0.01)
+    
+    for _ in range(args.num_epochs):
+        for example in train_exs:
+            # zero out gradients
+            optimizer.zero_grad()
+            
+            #run prediction
+            word_indices = np.array([word_embeddings.get_embedding(word) for word in example.words])
+            average = np.mean(word_indices, axis=0)
+            output = model.forward(torch.tensor(average))
+            loss = criterion(output, torch.tensor(example.label))
+            loss.backward()
+            optimizer.step()
+        random.shuffle(train_exs)
+        
+    return NeuralSentimentClassifier(model, word_embeddings,optimizer)
