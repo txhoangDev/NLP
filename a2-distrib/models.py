@@ -95,7 +95,7 @@ class DAN(nn.Module):
         """
         super(DAN, self).__init__()
         
-        self.non_linear = nn.ReLU()
+        self.non_linear = nn.Tanh()
         
         # hidden layer
         self.hidden_layers = nn.ModuleList()
@@ -136,13 +136,10 @@ def train_deep_averaging_network(args, train_exs: List[SentimentExample], dev_ex
     """
     model = DAN(word_embeddings.get_embedding_length(), 1, 2)
     criterion = nn.NLLLoss()
-    if train_model_for_typo_setting:
-        optimizer = optim.Adam(model.parameters(), 0.01)
-    else: 
-        optimizer = optim.Adam(model.parameters(), 0.001)
+    word_dictionary = {}
+    optimizer = optim.Adam(model.parameters(), 0.01)
     
     if train_model_for_typo_setting:
-        word_dictionary = {}
         for example in train_exs:
             for word in example.words:
                 if word[:3] in word_dictionary:
@@ -167,7 +164,4 @@ def train_deep_averaging_network(args, train_exs: List[SentimentExample], dev_ex
             optimizer.step()
         random.shuffle(train_exs)
     
-    if train_model_for_typo_setting:
-        return NeuralSentimentClassifier(model, word_embeddings, optimizer, word_dictionary)
-    else:
-        return NeuralSentimentClassifier(model, word_embeddings, optimizer, {})
+    return NeuralSentimentClassifier(model, word_embeddings, optimizer, word_dictionary)
