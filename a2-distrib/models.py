@@ -5,6 +5,7 @@ import torch.nn as nn
 from torch import optim
 import numpy as np
 import random
+import json
 from nltk import edit_distance
 from sentiment_data import *
 
@@ -108,6 +109,27 @@ class DAN(nn.Module):
         #get log probability 
         return self.log_softmax(output)
 
+class PrefixEmbeddings(WordEmbeddings):
+    """
+    Wraps an Indexer and a list of 1-D numpy arrays where each position in the list is the vector for the corresponding
+    word in the indexer. The 0 vector is returned if an unknown word is queried.
+    """
+    def __init__(self, word_indexer, vectors):
+        self.word_indexer = word_indexer
+        self.vectors = vectors
+
+    def get_embedding(self, word):
+        """
+        Returns the embedding for a given word
+        :param word: The word to look up
+        :return: The UNK vector if the word is not in the Indexer or the vector otherwise
+        """
+        prefix_idx = self.word_indexer.index_of(word[:3])
+        if prefix_idx != -1:
+            return self.vectors[prefix_idx]
+        else:
+            return self.vectors[self.word_indexer.index_of("UNK")]
+
 def train_deep_averaging_network(args, train_exs: List[SentimentExample], dev_exs: List[SentimentExample],
                                  word_embeddings: WordEmbeddings, train_model_for_typo_setting: bool) -> NeuralSentimentClassifier:
     """
@@ -121,22 +143,47 @@ def train_deep_averaging_network(args, train_exs: List[SentimentExample], dev_ex
     for the two settings.
     """
     model = DAN(word_embeddings.get_embedding_length(), 1, 2)
-    # classifier = NeuralSentimentClassifier( word_embeddings)
     criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), 0.01)
+    
+    if train_deep_averaging_network:
+        prefix_indexer = Indexer()
+        prefix_vectors = []
+        words = []
+        
+        for example in train_exs:
+            for word in example.words:
+                prefix = word[:3]
+                prefix_idx = prefix_indexer.index_of(prefix)
+                if prefix_idx == -1:
+                    prefix_idx = prefix_indexer.add_and_get_index(prefix)
+                    prefix_vectors.append(np.zeros_like(word_embeddings.get_embedding(word)))
+                prefix_vectors[prefix_idx] += word_embeddings.get_embedding(word)
+                words.append(word)
+        for i in range(len(prefix_vectors)):
+            prefix_vectors[i] /= len([word_embeddings.get_embedding(word) for word in words if word.startswith(prefix_indexer.get_object(i))])
+
+        # Create PrefixEmbeddings object
+        prefix_embeddings = PrefixEmbeddings(prefix_indexer, prefix_vectors)
     
     for _ in range(args.num_epochs):
         for example in train_exs:
             # zero out gradients
             optimizer.zero_grad()
             
-            #run prediction
-            word_indices = np.array([word_embeddings.get_embedding(word) for word in example.words])
+            # train model
+            if train_deep_averaging_network:
+                word_indices = np.array([prefix_embeddings.get_embedding(word) for word in example.words])
+            else:
+                word_indices = np.array([word_embeddings.get_embedding(word) for word in example.words])
             average = np.mean(word_indices, axis=0)
             output = model.forward(torch.tensor(average))
             loss = criterion(output, torch.tensor(example.label))
             loss.backward()
             optimizer.step()
         random.shuffle(train_exs)
-        
-    return NeuralSentimentClassifier(model, word_embeddings,optimizer)
+    
+    if train_deep_averaging_network:
+        return NeuralSentimentClassifier(model, prefix_embeddings, optimizer)
+    else:
+        return NeuralSentimentClassifier(model, word_embeddings, optimizer)
