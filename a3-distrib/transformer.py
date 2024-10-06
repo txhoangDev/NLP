@@ -9,7 +9,6 @@ from torch import optim
 import matplotlib.pyplot as plt
 from typing import List
 from utils import *
-import math
 
 
 # Wraps an example: stores the raw input string (input), the indexed form of the string (input_indexed),
@@ -86,7 +85,7 @@ class TransformerLayer(nn.Module):
         self.key_vector = nn.Linear(d_model, d_internal)
         self.value_vector = nn.Linear(d_model, d_internal)
         self.output_vector = nn.Linear(d_internal, d_model)
-        self.size = math.sqrt(d_internal)
+        self.size = torch.sqrt(torch.tensor(d_internal))
         self.feedforward = nn.Sequential(
             nn.Linear(d_model, d_internal),
             nn.ReLU(),
@@ -101,18 +100,14 @@ class TransformerLayer(nn.Module):
         values = self.value_vector(input_vecs)
         
         # Compute score
-        score = torch.matmul(queries, keys.transpose(-2, -1))
-        
-        # divide score and softmax
-        score = score / self.size
-        weights = nn.functional.softmax(score, dim=1)
+        weights = torch.softmax(torch.matmul(queries, keys.transpose(-2, -1)) / self.size, dim=-1)
         output = torch.matmul(weights, values)
 
         # Output projection
         output = self.output_vector(output)
 
         # first residual
-        output = input_vecs + output  # First residual connection
+        output = input_vecs + output
         # feedforward
         feedforward_output = self.feedforward(output)
         # second residual
@@ -157,7 +152,7 @@ class PositionalEncoding(nn.Module):
 def train_classifier(args, train, dev):
     # The following code DOES NOT WORK but can be a starting point for your implementation
     # Some suggested snippets to use:
-    model = Transformer(vocab_size=27, num_positions=20, d_model=128, d_internal=256,  num_classes=3, num_layers=1)
+    model = Transformer(vocab_size=27, num_positions=20, d_model=64, d_internal=128,  num_classes=3, num_layers=2)
     model.zero_grad()
     model.train()
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
