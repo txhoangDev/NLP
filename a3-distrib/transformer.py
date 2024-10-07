@@ -45,7 +45,6 @@ class Transformer(nn.Module):
         self.linear_layer = nn.Linear(d_model, num_classes)
         self.position_encoding = PositionalEncoding(d_model, num_positions)
         self.embedding_layer = nn.Embedding(vocab_size, d_model)
-        self.softmax = nn.Softmax(dim=-1)
         self.dropout_layer = nn.Dropout(p=0.1)
 
     def forward(self, indices):
@@ -64,9 +63,8 @@ class Transformer(nn.Module):
         for layer in self.layers:
             output, weights = layer(output)
             attention_map.append(weights)
-        # use linear and softmax layers to predict
+        # use linear to predict
         output = self.linear_layer(output)
-        output = self.softmax(output)
         
         return output, attention_map
 
@@ -152,10 +150,12 @@ class PositionalEncoding(nn.Module):
 def train_classifier(args, train, dev):
     # The following code DOES NOT WORK but can be a starting point for your implementation
     # Some suggested snippets to use:
-    model = Transformer(vocab_size=27, num_positions=20, d_model=64, d_internal=128,  num_classes=3, num_layers=2)
+    model = Transformer(vocab_size=27, num_positions=20, d_model=32, d_internal=128,  num_classes=3, num_layers=1)
     model.zero_grad()
     model.train()
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    loss_fcn = nn.NLLLoss()
+    log_softmax = nn.LogSoftmax(dim=1)
 
     num_epochs = 10
     for t in range(0, num_epochs):
@@ -164,10 +164,10 @@ def train_classifier(args, train, dev):
         # You can use batching if you'd like
         ex_idxs = [i for i in range(0, len(train))]
         random.shuffle(ex_idxs)
-        loss_fcn = nn.NLLLoss()
         for ex_idx in ex_idxs:
             optimizer.zero_grad()
             output, attention_map = model.forward(train[ex_idx].input_tensor)
+            output = log_softmax(output)
             loss = loss_fcn(output, train[ex_idx].output_tensor)
             loss.backward()
             optimizer.step()
