@@ -1,7 +1,6 @@
 # factcheck.py
 
 import torch
-import string
 from typing import List
 import numpy as np
 import spacy
@@ -9,9 +8,7 @@ import gc
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer, PorterStemmer
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from nltk.stem import PorterStemmer
 import re
 
 class FactExample:
@@ -91,7 +88,6 @@ class WordRecallThresholdFactChecker(object):
         nltk.download('punkt')
         nltk.download('wordnet')
         self.stopwords = set(stopwords.words('english'))
-        self.lemmatizer = WordNetLemmatizer()
         self.stemmer = PorterStemmer()
         
     def preprocess(self, text: str) -> str:
@@ -100,7 +96,7 @@ class WordRecallThresholdFactChecker(object):
         text = re.sub(r'[^a-z\s]', ' ', text)
         text = re.sub(r'\s+', ' ', text).strip()
         tokens = word_tokenize(text)
-        tokens = [self.lemmatizer.lemmatize(token) for token in tokens if token not in self.stopwords]
+        tokens = [self.stemmer.stem(token) for token in tokens if token not in self.stopwords]
         return ' '.join(tokens)
     
     def predict(self, fact: str, passages: List[dict]) -> str:
