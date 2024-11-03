@@ -1,11 +1,18 @@
 # factcheck.py
 
 import torch
+import string
 from typing import List
 import numpy as np
 import spacy
 import gc
-
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer, PorterStemmer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import re
 
 class FactExample:
     """
@@ -77,12 +84,44 @@ class AlwaysEntailedFactChecker(object):
     def predict(self, fact: str, passages: List[dict]) -> str:
         return "S"
 
-
+# part 1
 class WordRecallThresholdFactChecker(object):
+    def __init__(self):
+        nltk.download('stopwords')
+        nltk.download('punkt')
+        nltk.download('wordnet')
+        self.stopwords = set(stopwords.words('english'))
+        self.lemmatizer = WordNetLemmatizer()
+        self.stemmer = PorterStemmer()
+        
+    def preprocess(self, text: str) -> str:
+        text = text.lower()
+        text = re.sub(r'<.*?>', '', text)
+        text = re.sub(r'[^a-z\s]', ' ', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        tokens = word_tokenize(text)
+        tokens = [self.lemmatizer.lemmatize(token) for token in tokens if token not in self.stopwords]
+        return ' '.join(tokens)
+    
     def predict(self, fact: str, passages: List[dict]) -> str:
-        raise Exception("Implement me")
-
-
+        # preprocess sentences
+        passage = self.preprocess(' '.join(p['text'] for p in passages)).split(" ")
+        fact_text = self.preprocess(fact).split(" ")
+        
+        # Tokenize the fact and passage
+        fact_tokens = set(fact_text)
+        passage_tokens = set(passage)
+        
+        # Length normalization similarity score
+        similarity = 0.0
+        if len(fact_tokens) > 0:
+            similarity = len(fact_tokens.intersection(passage_tokens)) / len(fact_tokens)
+        
+        if similarity >= 0.7:
+            return "S"
+        return "NS"
+    
+# part 2
 class EntailmentFactChecker(object):
     def __init__(self, ent_model):
         self.ent_model = ent_model
