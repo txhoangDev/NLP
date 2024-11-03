@@ -45,8 +45,7 @@ class EntailmentModel:
 
         # Note that the labels are ["entailment", "neutral", "contradiction"]. There are a number of ways to map
         # these logits or probabilities to classification decisions; you'll have to decide how you want to do this.
-
-        raise Exception("Not implemented")
+        probs = torch.softmax(logits, dim=-1).squeeze().numpy()
 
         # To prevent out-of-memory (OOM) issues during autograding, we explicitly delete
         # objects inputs, outputs, logits, and any results that are no longer needed after the computation.
@@ -54,6 +53,7 @@ class EntailmentModel:
         gc.collect()
 
         # return something
+        return probs
 
 
 class FactChecker(object):
@@ -81,7 +81,6 @@ class AlwaysEntailedFactChecker(object):
     def predict(self, fact: str, passages: List[dict]) -> str:
         return "S"
 
-# part 1
 class WordRecallThresholdFactChecker(object):
     def __init__(self):
         nltk.download('stopwords')
@@ -121,10 +120,27 @@ class WordRecallThresholdFactChecker(object):
 class EntailmentFactChecker(object):
     def __init__(self, ent_model):
         self.ent_model = ent_model
+        
+    def preprocess(self, sentence: str):
+        text = sentence.lower()
+        text = re.sub(r'<.*?>', '', text)
+        text = re.sub(r'[^a-z\s]', ' ', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text
 
     def predict(self, fact: str, passages: List[dict]) -> str:
-        raise Exception("Implement me")
-
+        # clean sentences
+        passage_preprocessed = [p['text'] for p in passages]
+        
+        # loop through each passage
+        decision = "NS"
+        for passage in passage_preprocessed:
+            probs = self.ent_model.check_entailment(passage, fact)
+            if probs[0] > 0.06:
+                decision = "S"
+                break
+        
+        return decision
 
 # OPTIONAL
 class DependencyRecallThresholdFactChecker(object):
