@@ -7,7 +7,7 @@ import spacy
 import gc
 import nltk
 from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
+from nltk.tokenize import word_tokenize, sent_tokenize
 from nltk.stem import PorterStemmer
 import re
 
@@ -45,7 +45,7 @@ class EntailmentModel:
 
         # Note that the labels are ["entailment", "neutral", "contradiction"]. There are a number of ways to map
         # these logits or probabilities to classification decisions; you'll have to decide how you want to do this.
-        probs = torch.softmax(logits, dim=-1).squeeze().numpy()
+        probs = torch.softmax(logits, dim=1).squeeze().numpy()
 
         # To prevent out-of-memory (OOM) issues during autograding, we explicitly delete
         # objects inputs, outputs, logits, and any results that are no longer needed after the computation.
@@ -116,29 +116,21 @@ class WordRecallThresholdFactChecker(object):
             return "S"
         return "NS"
     
-# part 2
 class EntailmentFactChecker(object):
     def __init__(self, ent_model):
         self.ent_model = ent_model
-        
-    def preprocess(self, sentence: str):
-        text = sentence.lower()
-        text = re.sub(r'<.*?>', '', text)
-        text = re.sub(r'[^a-z\s]', ' ', text)
-        text = re.sub(r'\s+', ' ', text).strip()
-        return text
 
     def predict(self, fact: str, passages: List[dict]) -> str:
         # clean sentences
-        passage_preprocessed = [p['text'] for p in passages]
+        passage_preprocessed = []
+        for p in passages:
+            passage_preprocessed += sent_tokenize(p["text"])
         
-        # loop through each passage
         decision = "NS"
         for passage in passage_preprocessed:
             probs = self.ent_model.check_entailment(passage, fact)
-            if probs[0] > 0.06:
+            if probs[0] > 0.07:
                 decision = "S"
-                break
         
         return decision
 
