@@ -119,19 +119,59 @@ class WordRecallThresholdFactChecker(object):
 class EntailmentFactChecker(object):
     def __init__(self, ent_model):
         self.ent_model = ent_model
+        nltk.download('stopwords')
+        nltk.download('punkt')
+        nltk.download('wordnet')
+        self.stopwords = set(stopwords.words('english'))
+        self.stemmer = PorterStemmer()
+        
+    def preprocess(self, text: str):
+        text = text.lower()
+        text = re.sub(r'<.*?>+\w+', '', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text
+    
+    def preprocess_overlap(self, text: str) -> str:
+        text = text.lower()
+        text = re.sub(r'<.*?>', '', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        tokens = word_tokenize(text)
+        tokens = [self.stemmer.stem(token) for token in tokens if token not in self.stopwords]
+        return ' '.join(tokens)
+
+    def check_overlap(self, fact: str, passages: List[dict]) -> str:
+        # preprocess sentences
+        passage = [passages[0]["title"]] + self.preprocess_overlap(' '.join(p['text'] for p in passages)).split(" ")
+        fact_text = self.preprocess_overlap(fact).split(" ")
+        
+        # Tokenize the fact and passage
+        fact_tokens = set(fact_text)
+        passage_tokens = set(passage)
+        
+        # Length normalization similarity score
+        similarity = 0.0
+        if len(fact_tokens) > 0:
+            similarity = len(fact_tokens.intersection(passage_tokens)) / len(fact_tokens)
+        
+        if similarity >= 0.3:
+            return "S"
+        return "NS"
 
     def predict(self, fact: str, passages: List[dict]) -> str:
-        # clean sentences
-        passage_preprocessed = []
-        for p in passages:
-            passage_preprocessed += sent_tokenize(p["text"])
-        
         decision = "NS"
-        for passage in passage_preprocessed:
-            probs = self.ent_model.check_entailment(passage, fact)
-            if probs[0] > 0.07:
-                decision = "S"
+        overlap = self.check_overlap(fact, passages)
         
+        if overlap == "S":
+            fact_cleaned = self.preprocess(fact)
+            passage = " ".join(p["text"] for p in passages)
+            title = passages[0]["title"]
+            passage_preprocessed = sent_tokenize(passage)
+            for passage in passage_preprocessed:
+                prob = self.ent_model.check_entailment(f"{title} {passage}", fact_cleaned)
+                if prob.argmax() == 0:
+                    decision = "S"
+                    break
+            
         return decision
 
 # OPTIONAL
